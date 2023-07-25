@@ -197,6 +197,8 @@ class LaNerfactoField(Field):
             backend="nnj",
         )
 
+        self.memory_factor = 0.999
+
         # parameter to keep track of when to resample parameters.
         # if the we are not in training, but the last call was in training,
         # we need to resample parameters.
@@ -262,6 +264,9 @@ class LaNerfactoField(Field):
         density = density.view(*ray_samples.frustums.shape, -1)
         density = density * selector[..., None]
 
+        if self.online_laplace and self.training:
+            vector_to_parameters(mu_q, self.density_mlp.parameters())
+
         # laplace approximation on the densities
         density_mu, density_sigma = None, None
         if not self.training:
@@ -306,7 +311,7 @@ class LaNerfactoField(Field):
                 model=self.density_mlp,
             )
             # momentum like update
-            self.density_hessian = 0.999 * self.density_hessian + hessian_batch
+            self.density_hessian = self.memory_factor * self.density_hessian + hessian_batch
 
         return density, grid_features, density_mu, density_sigma
 
@@ -357,6 +362,9 @@ class LaNerfactoField(Field):
         rgb = self.rgb_mlp(h)
         outputs.update({FieldHeadNames.RGB: rgb.view(*outputs_shape, -1).to(directions)})
 
+        if self.online_laplace and self.training:
+            vector_to_parameters(mu_q, self.rgb_mlp.parameters())
+
         # laplace approximation on the rgb values
         if not self.training:
 
@@ -397,6 +405,6 @@ class LaNerfactoField(Field):
                 model=self.rgb_mlp,
             )
             # momentum like update
-            self.hessian = 0.999 * self.hessian + hessian_batch
+            self.hessian = self.memory_factor * self.hessian + hessian_batch
 
         return outputs
