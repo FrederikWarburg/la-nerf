@@ -23,7 +23,7 @@ la_nerf_method = MethodSpecification(
         mixed_precision=True,
         pipeline=VanillaPipelineConfig(
             datamanager=VanillaDataManagerConfig(
-                dataparser=NerfstudioDataParserConfig(train_split_fraction=0.99),
+                dataparser=NerfstudioDataParserConfig(train_split_fraction=0.99, eval_mode="eval-frame-index"),
                 train_num_rays_per_batch=4096,
                 eval_num_rays_per_batch=4096,
                 camera_optimizer=CameraOptimizerConfig(

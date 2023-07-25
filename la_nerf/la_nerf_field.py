@@ -23,6 +23,19 @@ import nnj
 import pytorch_laplace
 
 
+activations = {
+    "tanh" : torch.nn.Tanh(),
+    "relu" : torch.nn.ReLU(),
+    "elu" : torch.nn.ELU(),
+    "leaky_relu" : torch.nn.LeakyReLU(),
+}
+
+output_activations = {
+    "softplus" : torch.nn.Softplus(),
+    "truncexp" : nnj.TruncExp(),
+}
+
+
 def get_mlp(in_dim, hidden_dim, out_dim, num_layers, activation, out_activation):
 
     layers = [nn.Linear(in_dim, hidden_dim)]
@@ -63,6 +76,8 @@ class LaNerfactoField(Field):
         laplace_method: which laplace method to use
         laplace_num_samples: number of samples to use for laplace
         laplace_hessian_shape: shape of the hessian to use for laplace
+        act_fn: activation function to use for mlp
+        out_act_fn: output activation function to use for mlp
     """
 
     aabb: Tensor
@@ -89,6 +104,8 @@ class LaNerfactoField(Field):
         laplace_method: Literal["laplace", "linearized-laplace"]="linearized-laplace",
         laplace_num_samples: int = 10,
         laplace_hessian_shape: Literal["diag", "kron", "full"]="diag",
+        act_fn: Literal["tanh", "relu", "elu", "leaky_relu"]="tanh",
+        out_act_fn: Literal["softplus", "truncexp"]="softplus",
     ) -> None:
         super().__init__()
 
@@ -136,8 +153,8 @@ class LaNerfactoField(Field):
             hidden_dim=hidden_dim,
             out_dim=1,
             num_layers=num_layers,
-            activation=nn.Tanh(),
-            out_activation=nn.Softplus(),
+            activation=activations[act_fn],
+            out_activation=output_activations[out_act_fn],
         )
 
         self.rgb_mlp = get_mlp(
@@ -145,7 +162,7 @@ class LaNerfactoField(Field):
             hidden_dim=hidden_dim_color, 
             out_dim=3,
             num_layers=num_layers_color, 
-            activation=nn.Tanh(), 
+            activation=activations[act_fn], 
             out_activation=nn.Sigmoid(),
         )
 
