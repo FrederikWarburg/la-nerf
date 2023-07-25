@@ -11,7 +11,7 @@ import torch
 from nerfstudio.cameras.rays import RayBundle, RaySamples
 from nerfstudio.field_components.field_heads import FieldHeadNames
 from nerfstudio.field_components.spatial_distortions import SceneContraction
-from nerfstudio.model_components.losses import interlevel_loss
+from nerfstudio.model_components.losses import interlevel_loss, distortion_loss
 from nerfstudio.models.nerfacto import NerfactoModel, NerfactoModelConfig
 from nerfstudio.model_components.renderers import UncertaintyRenderer
 
@@ -42,6 +42,8 @@ class LaNerfModelConfig(NerfactoModelConfig):
     # output activation function
     out_act_fn: Literal["softplus", "truncexp"] = "softplus"
 
+    # online laplace
+    online_laplace: bool = False
 
 class LaNerfModel(NerfactoModel):
     """Model for InstructNeRF2NeRF."""
@@ -75,6 +77,7 @@ class LaNerfModel(NerfactoModel):
             laplace_hessian_shape=self.config.laplace_hessian_shape,
             act_fn=self.config.act_fn,
             out_act_fn=self.config.out_act_fn,
+            online_laplace=self.config.online_laplace,
         )
 
         self.renderer_uq = UncertaintyRenderer()
@@ -159,3 +162,25 @@ class LaNerfModel(NerfactoModel):
             outputs["density_sigma"] = density_sigma
             
         return outputs
+
+    def get_metrics_dict(self, outputs, batch):
+        metrics_dict = {}
+        image = batch["image"].to(self.device)
+        metrics_dict["psnr"] = self.psnr(outputs["rgb"], image)
+        if self.training:
+            metrics_dict["distortion"] = distortion_loss(outputs["weights_list"], outputs["ray_samples_list"])
+
+        if self.training:
+            metrics_dict["hessian/max"] = self.field.hessian.max()
+            metrics_dict["hessian/min"] = self.field.hessian.min()
+            metrics_dict["hessian/mean"] = self.field.hessian.mean()
+            metrics_dict["hessian/median"] = self.field.hessian.median()
+            metrics_dict["hessian/sum"] = self.field.hessian.sum()
+
+            metrics_dict["hessian_density/max"] = self.field.density_hessian.max()
+            metrics_dict["hessian_density/min"] = self.field.density_hessian.min()
+            metrics_dict["hessian_density/mean"] = self.field.density_hessian.mean()
+            metrics_dict["hessian_density/median"] = self.field.density_hessian.median()
+            metrics_dict["hessian_density/sum"] = self.field.density_hessian.sum()
+
+        return metrics_dict

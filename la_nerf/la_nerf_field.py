@@ -17,7 +17,7 @@ from nerfstudio.field_components.spatial_distortions import SpatialDistortion
 from nerfstudio.fields.base_field import Field, shift_directions_for_tcnn
 from torch import Tensor, nn
 
-from torch.nn.utils import parameters_to_vector
+from torch.nn.utils import parameters_to_vector, vector_to_parameters
 
 import nnj
 import pytorch_laplace
@@ -106,6 +106,7 @@ class LaNerfactoField(Field):
         laplace_hessian_shape: Literal["diag", "kron", "full"]="diag",
         act_fn: Literal["tanh", "relu", "elu", "leaky_relu"]="tanh",
         out_act_fn: Literal["softplus", "truncexp"]="softplus",
+        online_laplace: bool = True,
     ) -> None:
         super().__init__()
 
@@ -169,6 +170,7 @@ class LaNerfactoField(Field):
         self.laplace_method = laplace_method
         self.laplace_num_samples = laplace_num_samples
         self.laplace_hessian_shape = laplace_hessian_shape
+        self.online_laplace = online_laplace
 
         # initialize hessian
         self.hessian = 10**6 * torch.ones_like(
@@ -249,6 +251,13 @@ class LaNerfactoField(Field):
             self._sample_locations.requires_grad = True
         positions_flat = positions.view(-1, 3)
         grid_features = self.base_grid(positions_flat).float()
+
+        if self.online_laplace and self.training:
+            sigma_q = self.la_sampler.posterior_scale(hessian=self.density_hessian)
+            mu_q = parameters_to_vector(self.density_mlp.parameters())
+            density_weight_samples = self.la_sampler.sample_from_normal(mu_q, sigma_q, 1)
+            vector_to_parameters(density_weight_samples[0], self.density_mlp.parameters())
+
         density = self.density_mlp(grid_features)
         density = density.view(*ray_samples.frustums.shape, -1)
         density = density * selector[..., None]
@@ -338,6 +347,12 @@ class LaNerfactoField(Field):
             ],
             dim=-1,
         )
+
+        if self.online_laplace and self.training:
+            sigma_q = self.la_sampler.posterior_scale(hessian=self.hessian)
+            mu_q = parameters_to_vector(self.rgb_mlp.parameters())
+            weight_samples = self.la_sampler.sample_from_normal(mu_q, sigma_q, 1)
+            vector_to_parameters(weight_samples[0], self.rgb_mlp.parameters())
 
         rgb = self.rgb_mlp(h)
         outputs.update({FieldHeadNames.RGB: rgb.view(*outputs_shape, -1).to(directions)})
