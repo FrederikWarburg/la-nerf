@@ -20,7 +20,7 @@ la_nerf_method = MethodSpecification(
         steps_per_eval_batch=500,
         steps_per_save=2000,
         max_num_iterations=30000,
-        mixed_precision=True,
+        mixed_precision=False,
         pipeline=VanillaPipelineConfig(
             datamanager=VanillaDataManagerConfig(
                 dataparser=NerfstudioDataParserConfig(train_split_fraction=0.99, eval_mode="eval-frame-index"),

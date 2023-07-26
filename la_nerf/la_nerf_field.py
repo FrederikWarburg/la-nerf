@@ -78,6 +78,7 @@ class LaNerfactoField(Field):
         laplace_hessian_shape: shape of the hessian to use for laplace
         act_fn: activation function to use for mlp
         out_act_fn: output activation function to use for mlp
+        hessian_update_ema: whether to use ema for hessian updates
     """
 
     aabb: Tensor
@@ -107,6 +108,7 @@ class LaNerfactoField(Field):
         act_fn: Literal["tanh", "relu", "elu", "leaky_relu"]="tanh",
         out_act_fn: Literal["softplus", "truncexp"]="softplus",
         online_laplace: bool = True,
+        hessian_update_ema: bool = True,
     ) -> None:
         super().__init__()
 
@@ -198,6 +200,8 @@ class LaNerfactoField(Field):
         )
 
         self.memory_factor = 0.999
+        self.dataset_size = 100 * 256 * 256 # assume 100 images of size 256x256
+        self.hessian_update_ema = hessian_update_ema
 
         # parameter to keep track of when to resample parameters.
         # if the we are not in training, but the last call was in training,
@@ -311,7 +315,12 @@ class LaNerfactoField(Field):
                 model=self.density_mlp,
             )
             # momentum like update
-            self.density_hessian = self.memory_factor * self.density_hessian + hessian_batch
+            batch_size = density.shape[0]
+            hessian = hessian_batch * self.dataset_size / batch_size
+            if self.hessian_update_ema:
+                self.density_hessian = self.memory_factor * self.density_hessian + hessian
+            else:
+                self.density_hessian = hessian.type_as(self.density_hessian)
 
         return density, grid_features, density_mu, density_sigma
 
@@ -405,6 +414,11 @@ class LaNerfactoField(Field):
                 model=self.rgb_mlp,
             )
             # momentum like update
-            self.hessian = self.memory_factor * self.hessian + hessian_batch
+            batch_size = rgb.shape[0]
+            hessian = hessian_batch * self.dataset_size / batch_size
+            if self.hessian_update_ema:
+                self.hessian = self.memory_factor * self.hessian + hessian
+            else:
+                self.hessian = hessian.type_as(self.hessian)
 
         return outputs

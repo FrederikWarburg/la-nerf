@@ -37,13 +37,16 @@ class LaNerfModelConfig(NerfactoModelConfig):
     laplace_hessian_shape: Literal["diag", "kron", "full"] = "diag"
 
     # activation function
-    act_fn: Literal["relu", "tanh", "elu"] = "relu"
+    act_fn: Literal["relu", "tanh", "elu"] = "tanh"
 
     # output activation function
     out_act_fn: Literal["softplus", "truncexp"] = "softplus"
 
     # online laplace
     online_laplace: bool = False
+
+    # hessian update ema
+    hessian_update_ema: bool = True
 
 class LaNerfModel(NerfactoModel):
     """Model for InstructNeRF2NeRF."""
@@ -78,6 +81,7 @@ class LaNerfModel(NerfactoModel):
             act_fn=self.config.act_fn,
             out_act_fn=self.config.out_act_fn,
             online_laplace=self.config.online_laplace,
+            hessian_update_ema=self.config.hessian_update_ema,
         )
 
         self.renderer_uq = UncertaintyRenderer()
